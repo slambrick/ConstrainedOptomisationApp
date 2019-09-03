@@ -15,6 +15,7 @@
 library(shiny)
 library(magrittr)
 library(tidyverse)
+library(plotly)
 
 # Define physical constants and other fixed parameters, SI units used throughout
 lambda <- 5.63e-11     # Room temperature helium wavelength
@@ -50,36 +51,51 @@ beta_calc <- function(dist) atan(skim/dist)
 # Define UI for application that draws a histogram
 ui <- fluidPage(
    
-   # Application title
-   titlePanel("SHeM Constrained Optomisation"),
+    # Application title
+    titlePanel("SHeM Constrained Optomisation"),
    
-   # Sidebar with a slider input for the 
-   sidebarLayout(
-      sidebarPanel(
-         sliderInput("working_dist",
-                     "Working distance (mm):",
-                     min = 0.5,
-                     max = 5,
-                     value = 3)
-      ),
+    # Sidebar with a slider input for the 
+    sidebarLayout(
+        sidebarPanel(
+            sliderInput("working_dist",
+                        "Working distance (mm):",
+                        min = 0.5,
+                        max = 5,
+                        value = 3),
+            sliderInput("pinhole_range",
+                        "Pinhole range (um):",
+                        min = 0.01,
+                        max = 10,
+                        value = c(0.1, 1)),
+            sliderInput("source_range",
+                        "Source distance range (cm):",
+                        min = 5,
+                        max = 100,
+                        value = c(10, 30))
+        ),
       
-      # Show a plot of the generated distribution
-      mainPanel(
-         plotOutput("resolution_plot")
-      )
-   )
+        # Show a plot of the generated distribution
+        mainPanel(
+            plotlyOutput("resolution_plot"),
+            verbatimTextOutput("event")
+        )
+    )
 )
 
-# Define server logic required to draw a histogram
+# Define server logic required to draw a heat map
 server <- function(input, output) {
+
+
    
-   output$resolution_plot <- renderPlot({
+    output$resolution_plot <- renderPlotly({
         # Values for the source distance
-        source_dist <- seq(10, 30, by = 0.2)*1e-2
+        s_range <- input$source_range
+        source_dist <- seq(s_range[1], s_range[2], length.out = 100)*1e-2
         N_s <- length(source_dist)
         
         # Values for the pinhole diameter
-        pinhole_d <- seq(0.1, 1, by = 0.02)*1e-6
+        pin_range <- input$pinhole_range
+        pinhole_d <- seq(pin_range[1], pin_range[2], length.out = 100)*1e-6
         N_p <- length(pinhole_d)
         
         # Create data
@@ -93,17 +109,40 @@ server <- function(input, output) {
             FWHM = standard_deviation*2*sqrt(2*log(2))
         )
         
-        # Plot of the resolution
-        pin_df %>% ggplot(aes(x = pinhole*1e6, y = source_dists*1e2, z = FWHM*1e6)) +
-            geom_raster(aes(fill = FWHM*1e6), interpolate = TRUE) +
-            geom_contour(colour = "white", linemitre = 20) +
-            scale_fill_continuous(type = "viridis") + 
-            labs(x = expression(paste("Pinhole diameter/", mu, "m", sep="")),
-                 y = "Source distance/cm", 
-                 fill = expression(paste("FWHM/", mu, "m", sep=""))) +
-            theme_classic() +
-            theme(legend.key.height = unit(2, "cm"))
-   })
+        if (FALSE) {
+            # Plot of the resolution using ggplot
+            pin_df %>% ggplot(aes(x = pinhole*1e6, y = source_dists*1e2, z = FWHM*1e6)) +
+                geom_raster(aes(fill = FWHM*1e6), interpolate = TRUE) +
+                geom_contour(colour = "white", linemitre = 20) +
+                scale_fill_continuous(type = "viridis") + 
+                labs(x = expression(paste("Pinhole diameter/", mu, "m", sep="")),
+                    y = "Source distance/cm", 
+                    fill = expression(paste("FWHM/", mu, "m", sep=""))) +
+                theme_classic() +
+                theme(legend.key.height = unit(2, "cm"))
+        } else {
+            # Interactive plot of the resolution using plotly
+            wide_df <- pin_df %>% select(pinhole, source_dists, FWHM) %>% 
+                spread(pinhole, FWHM) %>% mutate(source_dists=NULL)
+            FWHM_mat <- as.matrix(wide_df)
+            
+            ax <- list(title = "Pinhole diameter/&mu;m")
+            ay <- list(title = "Source distance/cm")
+            
+            plot_ly(
+                x = pinhole_d*1e6,
+                y = source_dist*1e2,
+                z = FWHM_mat*1e6,
+                type = "contour"
+            ) %>% colorbar(title = "FWHM/&mu;m") %>%
+                layout(xaxis = ax, yaxis = ay)
+        }
+    })
+   
+    output$event <- renderPrint({
+        d <- event_data("plotly_hover")
+        if (is.null(d)) "Hover on a point!" else d
+    })
 }
 
 # Run the application 
