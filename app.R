@@ -43,10 +43,13 @@ beta_o <- function(sig, f) {
 }
 
 # Optimal flux
-F_o <- function(sig, f) 3*gamma*(3*sig^4/f^2 - (0.42*lambda)^2)
+F_o <- function(beta, d) gamma*d^2*beta^2
 
 # Virtual source size from skimmer-pinhole distance
 beta_calc <- function(dist) atan(skim/dist)
+
+# Normalisation value for the flux
+flux_base <- F_o(beta_calc(0.23), 0.38e-6)
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -71,7 +74,17 @@ ui <- fluidPage(
                         "Source distance range (cm):",
                         min = 5,
                         max = 100,
-                        value = c(10, 30))
+                        value = c(10, 30)),
+            radioButtons("axis_scale",
+                         "Pinhole axis scaling:",
+                         choices = c("Linear", "Log"),
+                         selected = "Linear",
+                         inline = TRUE),
+            radioButtons("flux_scaling",
+                         "Relative flux scaling:",
+                         choices = c("Linear", "Log"),
+                         selected = "Linear",
+                         inline = TRUE)
         ),
       
         # Show a plot of the generated distribution
@@ -105,43 +118,72 @@ server <- function(input, output) {
         pin_df %<>% mutate(
             betas = beta_calc(source_dists),
             standard_deviation = theta_p(pinhole, betas, input$working_dist*1e-3),
-            flux = F_o(standard_deviation, input$working_dist*1e-3),
+            flux = F_o(betas, pinhole),
             FWHM = standard_deviation*2*sqrt(2*log(2))
         )
         
-        if (FALSE) {
-            # Plot of the resolution using ggplot
-            pin_df %>% ggplot(aes(x = pinhole*1e6, y = source_dists*1e2, z = FWHM*1e6)) +
-                geom_raster(aes(fill = FWHM*1e6), interpolate = TRUE) +
-                geom_contour(colour = "white", linemitre = 20) +
-                scale_fill_continuous(type = "viridis") + 
-                labs(x = expression(paste("Pinhole diameter/", mu, "m", sep="")),
-                    y = "Source distance/cm", 
-                    fill = expression(paste("FWHM/", mu, "m", sep=""))) +
-                theme_classic() +
-                theme(legend.key.height = unit(2, "cm"))
-        } else {
-            # Interactive plot of the resolution using plotly
-            wide_df <- pin_df %>% select(pinhole, source_dists, FWHM) %>% 
-                spread(pinhole, FWHM) %>% mutate(source_dists=NULL)
-            FWHM_mat <- as.matrix(wide_df)
-            
-            ax <- list(title = "Pinhole diameter/&mu;m")
-            ay <- list(title = "Source distance/cm")
-            
-            plot_ly(
-                x = pinhole_d*1e6,
-                y = source_dist*1e2,
-                z = FWHM_mat*1e6,
-                type = "contour"
-            ) %>% colorbar(title = "FWHM/&mu;m") %>%
-                layout(xaxis = ax, yaxis = ay)
-        }
+        # Interactive plot of the resolution using plotly
+        wide_df <- pin_df %>% select(pinhole, source_dists, FWHM) %>% 
+            spread(pinhole, FWHM) %>% mutate(source_dists=NULL)
+        FWHM_mat <- as.matrix(wide_df)
+        
+        
+        wide_df2 <- pin_df %>% select(pinhole, source_dists, flux) %>% 
+            spread(pinhole, flux) %>% mutate(source_dists=NULL)
+        flux_mat <- as.matrix(wide_df2)
+        
+        if (input$flux_scaling == "Log")
+            flux_mat <- log10(flux_mat)
+        
+        # Create plot of the resolution
+        if (input$axis_scale == "Linear")
+            ax <- list(title = "Pinhole diameter/&mu;m", typ2 = "linear")
+        else
+            ax <- list(title = "Pinhole diameter/&mu;m", type = "log")
+        ay <- list(title = "Source distance/cm")
+        
+        p1 <- plot_ly(
+            x = pinhole_d*1e6,
+            y = source_dist*1e2,
+            z = FWHM_mat*1e6,
+            type = "contour"
+        ) %>% colorbar(title = "FWHM/&mu;m") %>%
+            layout(xaxis = ax, yaxis = ay)
+        
+        p2 <- plot_ly(
+            x = pinhole_d*1e6,
+            y = source_dist*1e2,
+            z = flux_mat/flux_base,
+            type = "contour"
+        ) %>% colorbar(title = "Relative flux") %>%
+            layout(xaxis = ax, yaxis = ay)
+        
+        # Draw two plots
+        p <- subplot(p1, p2, shareY = TRUE, titleX = TRUE)
+        # Hack the damn thing to have sub plot titles
+        p %>% layout(annotations = list(
+            list(x = 0.2, 
+                 y = 1.08, 
+                 text = "Resolution", 
+                 showarrow = FALSE, 
+                 xref='paper', 
+                 yref='paper', 
+                 font = list(size = 16)
+            ),
+            list(x = 0.8, 
+                 y = 1.08, 
+                 text = "Relative flux", 
+                 showarrow = FALSE, 
+                 xref='paper', 
+                 yref='paper', 
+                 font = list(size = 16)
+            )
+        ))
     })
    
     output$event <- renderPrint({
-        d <- event_data("plotly_hover")
-        if (is.null(d)) "Hover on a point!" else d
+        d <- event_data("plotly_click")
+        if (is.null(d)) "Click on a point!" else d
     })
 }
 
