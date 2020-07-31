@@ -17,19 +17,25 @@ library(magrittr)
 library(tidyverse)
 library(plotly)
 
+# Physical variables used here:
+# f      - working distance
+# beta   - Virtual source size, assuming small skimmers
+# d      - pinhole diameter
+# lambda - wavelength of helium
+
+
 # Define physical constants and other fixed parameters, SI units used throughout
 lambda <- 5.63e-11     # Room temperature helium wavelength
 B_peak <- 1e20         # Optomised peak brightness (not calculated yet)
 gamma <- pi^2*B_peak/4 # Pinhole flux
-skim <- 100e-6         # Skimmer diameter
 
 # Define mathematical functions
 
 # Standard deviation for a pinhole
 theta_p <- function(d, beta, f) {
-    pinhole <- d/(2*sqrt(3))
-    source <- beta*f/sqrt(3)
-    diffraction <- 0.42*lambda*f/d
+    pinhole <- d/(2*sqrt(3))       # Geometric pattern from pinhole approximated as Gaussian
+    source <- beta*f/sqrt(3)       # Broadening due to finite source size
+    diffraction <- 0.42*lambda*f/d # Pinhole diffraction, Airy function
     return(sqrt(pinhole^2 + source^2 + diffraction^2))
 }
 
@@ -46,10 +52,7 @@ beta_o <- function(sig, f) {
 F_o <- function(beta, d) gamma*d^2*beta^2
 
 # Virtual source size from skimmer-pinhole distance
-beta_calc <- function(dist) atan(skim/dist)
-
-# Normalisation value for the flux
-flux_base <- F_o(beta_calc(0.23), 0.38e-6)
+beta_calc <- function(skim, dist) atan(skim/dist)
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -75,6 +78,11 @@ ui <- fluidPage(
                         min = 5,
                         max = 100,
                         value = c(10, 30)),
+            sliderInput("x_skimmer",
+                        "Skimmer diameter (um):",
+                        min = 10,
+                        max = 500,
+                        value = 100),
             radioButtons("axis_scale",
                          "Pinhole axis scaling:",
                          choices = c("Linear", "Log"),
@@ -103,20 +111,26 @@ server <- function(input, output) {
     output$resolution_plot <- renderPlotly({
         # Values for the source distance
         s_range <- input$source_range
-        source_dist <- seq(s_range[1], s_range[2], length.out = 100)*1e-2
+        source_dist <- seq(s_range[1], s_range[2], length.out = 50)*1e-2
         N_s <- length(source_dist)
         
         # Values for the pinhole diameter
         pin_range <- input$pinhole_range
-        pinhole_d <- seq(pin_range[1], pin_range[2], length.out = 100)*1e-6
+        pinhole_d <- seq(pin_range[1], pin_range[2], length.out = 50)*1e-6
         N_p <- length(pinhole_d)
+        
+        # Value for the skimmer radius
+        skim_x <- input$x_skimmer*1e-6/2
+        
+        # Normalisation value for the flux
+        flux_base <- F_o(beta_calc(skim_x, 0.23), 0.38e-6)
         
         # Create data
         pin_df <- tibble(pinhole = rep(pinhole_d, each = N_s),
                          source_dists = rep(source_dist, times = N_p))
         
         pin_df %<>% mutate(
-            betas = beta_calc(source_dists),
+            betas = beta_calc(skim_x, source_dists),
             standard_deviation = theta_p(pinhole, betas, input$working_dist*1e-3),
             flux = F_o(betas, pinhole),
             FWHM = standard_deviation*2*sqrt(2*log(2))
