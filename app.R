@@ -1,4 +1,4 @@
-# Sam Lambrick, 2019
+# Sam Lambrick, 2019-20
 #
 # Based on work by Matthew Bergin in the SMF group at the Cavendish Laboratory.
 # doi:10.17863/CAM.37853
@@ -53,6 +53,8 @@ F_o <- function(beta, d) gamma*d^2*beta^2
 
 # Virtual source size from skimmer-pinhole distance
 beta_calc <- function(skim, dist) atan(skim/dist)
+
+#produce_plots <- function(xs, ys, )
 
 working_fixed_plot <- function(source_range, pinhole_range, working_dist, skim_x, 
                                flux_base, flux_scaling, axis_scale) {
@@ -340,11 +342,15 @@ server <- function(input, output, session) {
     output$resolution_plot <- renderPlotly({
       
         # Value for the skimmer radius
-        skim_x <- input$x_skimmer*1e-6/2
+        skim_x <- input$x_skimmer*1e-6
         
         # Normalisation value for the flux
         flux_base <- F_o(beta_calc(skim_x, 0.23), 0.38e-6)
-      
+        
+        if (input$dist_type == "Beam") 
+            factor <- 1
+        else
+            factpr <- sqrt(2)
         # Which parameter is fixed
         if (input$fixed_param == "Working distance") {
             ps <- working_fixed_plot(input$source_range2, input$pinhole_range2, input$working_dist, 
