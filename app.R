@@ -1,4 +1,4 @@
-# Sam Lambrick, 2019-20
+# Sam Lambrick, 2019-22
 #
 # Based on work by Matthew Bergin in the SMF group at the Cavendish Laboratory.
 # doi:10.17863/CAM.37853
@@ -43,8 +43,8 @@ theta_p <- function(d, beta, f) {
 d_o <- function(sig) sqrt(6)*sig
 
 # Optimal virtual source size
-beta_o <- function(sig, f) {
-    a <- 0.42*f*lambda
+beta_o <- function(sig, f, th) {
+    a <- 0.42*f*lambda/cos(th)
     return((sqrt(3)/f)*sqrt(sig^2/2 - a^2/(d_o(sig)^2)))
 }
 
@@ -246,91 +246,133 @@ ui <- fluidPage(
     # Application title
     titlePanel("SHeM Constrained Optomisation"),
     
-    # Sidebar with a slider input for the 
-    sidebarLayout(
-    sidebarPanel(
-    selectInput("fixed_param",
-                        "Parameter to fix",
-                        choices = c("Working distance", "Pinhole size", "Source distance")),
-    
-    conditionalPanel(
-        "input.fixed_param == 'Working distance'",
-        sliderInput("working_dist",
-                    "Working distance (mm):",
-                    min = 0.1,
-                    max = 5,
-                    value = 3)
-    ),
-    conditionalPanel(
-        "input.fixed_param != 'Working distance'",
-        sliderInput("working_dist2",
-                    "Working distance range (mm):",
-                    min = 0.1,
-                    max = 5,
-                    value = c(0.5,3))
-    ),
-    
-    conditionalPanel(
-        "input.fixed_param == 'Pinhole size'",
-        sliderInput("pinhole_range",
-                    "Pinhole diameter (um):",
-                    min = 0.01,
-                    max = 10,
-                    value = 1)
-    ),
-    conditionalPanel(
-        "input.fixed_param != 'Pinhole size'",
-        sliderInput("pinhole_range2",
-                    "Pinhole range (um):",
-                     min = 0.01,
-                     max = 10,
-                     value = c(0.2, 2))
-    ),
-    
-    conditionalPanel(
-        "input.fixed_param == 'Source distance'",
-        sliderInput("source_range",
-                    "Source distance (cm):",
-                    min = 5,
-                    max = 100,
-                    value = 25)
-    ),
-    conditionalPanel(
-        "input.fixed_param != 'Source distance'",
-        sliderInput("source_range2",
-                    "Source distance range (cm):",
-                    min = 5,
-                    max = 100,
-                    value = c(10, 30))
-    ),
-    
-    sliderInput("x_skimmer",
-                "Skimmer diameter (um):",
-                min = 10,
-                max = 500,
-                value = 100),
-    
-    radioButtons("axis_scale",
-                 "Pinhole axis scaling:",
-                 choices = c("Linear", "Log"),
-                 selected = "Linear",
-                 inline = TRUE),
-    radioButtons("flux_scaling",
-                 "Relative flux scaling:",
-                 choices = c("Linear", "Log"),
-                 selected = "Linear",
-                 inline = TRUE),
-    radioButtons("dist_type",
-                 "Actual (beam) working distance or perpendicular distance:",
-                 choices = c("Beam", "Perpendicular"),
-                 selected = "Beam",
-                 inline = TRUE),
-    ),
-    
-    mainPanel(
-    plotlyOutput("resolution_plot"),
-    verbatimTextOutput("event")
-    )
+    # Tabset layout, first tab is signal level, 2nd is the optimisation
+    tabsetPanel(
+        tabPanel("Signal level",
+            # Sidebar with a slider input for the 
+            sidebarLayout(
+            sidebarPanel(
+                 selectInput("fixed_param",
+                             "Parameter to fix",
+                             choices = c("Working distance", "Pinhole size", "Source distance")),
+                         
+                 conditionalPanel(
+                     "input.fixed_param == 'Working distance'",
+                     sliderInput("working_dist",
+                                 "Working distance (mm):",
+                                 min = 0.1,
+                                 max = 5,
+                                 value = 3)
+                 ),
+                 conditionalPanel(
+                     "input.fixed_param != 'Working distance'",
+                     sliderInput("working_dist2",
+                                 "Working distance range (mm):",
+                                 min = 0.1,
+                                 max = 5,
+                                 value = c(0.5,3))
+                 ),
+                 
+                 conditionalPanel(
+                     "input.fixed_param == 'Pinhole size'",
+                     sliderInput("pinhole_range",
+                                 "Pinhole diameter (um):",
+                                 min = 0.01,
+                                 max = 10,
+                                 value = 1)
+                 ),
+                 conditionalPanel(
+                     "input.fixed_param != 'Pinhole size'",
+                     sliderInput("pinhole_range2",
+                                 "Pinhole range (um):",
+                                 min = 0.01,
+                                 max = 10,
+                                 value = c(0.2, 2))
+                 ),
+                 
+                 conditionalPanel(
+                     "input.fixed_param == 'Source distance'",
+                     sliderInput("source_range",
+                                 "Source distance (cm):",
+                                 min = 5,
+                                 max = 100,
+                                 value = 25)
+                 ),
+                 conditionalPanel(
+                     "input.fixed_param != 'Source distance'",
+                     sliderInput("source_range2",
+                                 "Source distance range (cm):",
+                                 min = 5,
+                                 max = 100,
+                                 value = c(10, 30))
+                 ),
+                         
+                 sliderInput("x_skimmer",
+                             "Skimmer diameter (um):",
+                             min = 10,
+                             max = 500,
+                             value = 100),
+                 
+                 radioButtons("axis_scale",
+                              "Pinhole axis scaling:",
+                              choices = c("Linear", "Log"),
+                              selected = "Linear",
+                              inline = TRUE),
+                 radioButtons("flux_scaling",
+                              "Relative flux scaling:",
+                              choices = c("Linear", "Log"),
+                              selected = "Linear",
+                              inline = TRUE),
+                 radioButtons("dist_type",
+                              "Actual (beam) working distance or perpendicular distance:",
+                              choices = c("Beam", "Perpendicular"),
+                              selected = "Beam",
+                              inline = TRUE),
+             ),
+             
+             mainPanel(
+                 br(),
+                 includeMarkdown("include1.md"),
+                 img(src='equation.png', align = "left", width = "350px"),
+                 br(),
+                 br(),
+                 br(),
+                 br(),
+                 br(),
+                 plotlyOutput("resolution_plot"),
+                 verbatimTextOutput("event")
+             )
+            )
+        ),
+        tabPanel("Optimisation of a geometry",
+            sidebarLayout(
+                sidebarPanel(
+            numericInput("sigma_target",
+                         "Target beam FWHM (um)",
+                         0.5,
+                         min = 0),
+            numericInput("theta_i",
+                         "Incidence angle (deg)",
+                         45,
+                         min = 0,
+                         max = 89),
+            numericInput("f_set",
+                         "Perpendicular working distance (mm)",
+                         1.41,
+                         min = 0),
+            numericInput("skim_d",
+                         "Skimmer diameter (mm)",
+                         0.1,
+                         min = 0)
+            ),
+            mainPanel(
+                br(),
+                includeMarkdown("include2.md"),
+                br(),
+                htmlOutput("optimseCalculation")
+            )
+            )
+        )
     )
 )
 
@@ -389,6 +431,16 @@ server <- function(input, output, session) {
     output$event <- renderPrint({
         d <- event_data("plotly_click")
         if (is.null(d)) "Click on a point!" else d
+    })
+    
+    output$optimseCalculation <- renderText({
+        d_0 <- d_o(input$sigma_target/2.355)
+        beta_0 <- beta_o(input$sigma_target*1e-6/2.355, input$f_set*1e-3/cos(input$theta_i*pi/180), 
+                         input$theta_i*pi/180) 
+        source_dist <- input$skim_d*1e-3/(2*beta_0)
+        source_dist <- source_dist*1e2 # Convert to cm
+        paste("<b>The optimal pinhole diameter is = ", as.character(d_0), " μm.<br>",
+              "The optimal source distance is = ", as.character(source_dist), " cm.</br>", sep="")
     })
 }
 
