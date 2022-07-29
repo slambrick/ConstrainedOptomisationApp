@@ -16,6 +16,7 @@ library(shiny)
 library(magrittr)
 library(tidyverse)
 library(plotly)
+library(markdown)
 
 # Physical variables used here:
 # f      - working distance
