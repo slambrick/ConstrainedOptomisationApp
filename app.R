@@ -45,7 +45,7 @@ d_o <- function(sig) sqrt(6)*sig
 
 # Optimal virtual source size
 beta_o <- function(sig, f, th) {
-    a <- 0.42*f*lambda/cos(th)
+    a <- 0.42*f*lambda/(cos(th)^2)
     return((sqrt(3)/f)*sqrt(sig^2/2 - a^2/(d_o(sig)^2)))
 }
 
@@ -329,6 +329,14 @@ ui <- fluidPage(
                               choices = c("Beam", "Perpendicular"),
                               selected = "Beam",
                               inline = TRUE),
+                 conditionalPanel(
+                     "input.dist_type == 'Perpendicular'",
+                     numericInput("incidence_angle",
+                                  "Incidence angle (deg)",
+                                  45,
+                                  min = 0,
+                                  max = 80)
+                 )
              ),
              
              mainPanel(
@@ -356,7 +364,7 @@ ui <- fluidPage(
                          "Incidence angle (deg)",
                          45,
                          min = 0,
-                         max = 89),
+                         max = 80),
             numericInput("f_set",
                          "Perpendicular working distance (mm)",
                          1.41,
@@ -391,18 +399,19 @@ server <- function(input, output, session) {
         flux_base <- F_o(beta_calc(skim_x, 0.23), 0.38e-6)
         
         if (input$dist_type == "Beam") 
-            factor <- 1
+            factpr <- 1
         else
-            factpr <- sqrt(2)
+            factpr <- 1/cos(input$incidence_angle*pi/180)
+        
         # Which parameter is fixed
         if (input$fixed_param == "Working distance") {
-            ps <- working_fixed_plot(input$source_range2, input$pinhole_range2, input$working_dist, 
+            ps <- working_fixed_plot(input$source_range2, input$pinhole_range2, input$working_dist*factpr, 
                                      skim_x, flux_base, input$flux_scaling, input$axis_scale)
         } else if (input$fixed_param == "Pinhole size") {
-          ps <- pinhole_fixed_plot(input$source_range2, input$pinhole_range, input$working_dist2, 
+          ps <- pinhole_fixed_plot(input$source_range2, input$pinhole_range, input$working_dist2*factpr, 
                                    skim_x, flux_base, input$flux_scaling, input$axis_scale)
         } else { # This case is the source distance
-          ps <- source_fixed_plot(input$source_range, input$pinhole_range2, input$working_dist2, 
+          ps <- source_fixed_plot(input$source_range, input$pinhole_range2, input$working_dist2*factpr, 
                                    skim_x, flux_base, input$flux_scaling, input$axis_scale)
         }
 
